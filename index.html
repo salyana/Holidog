@@ -222,15 +222,24 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         
+        // Keep only one oversupplied, two balanced, and all others as undersupplied
         const zoneData = [
-          { zone_id: "zone-eiffel", zone_name: "Eiffel Tower", petsitters_count: 80, users_count: 450, avg_sitter_activity_score: 4.2, avg_reviews_score: 4.7 },
-          { zone_id: "zone-montmartre", zone_name: "Montmartre", petsitters_count: 180, users_count: 320, avg_sitter_activity_score: 3.8, avg_reviews_score: 4.1 },
-          { zone_id: "zone-marais", zone_name: "Le Marais", petsitters_count: 120, users_count: 290, avg_sitter_activity_score: 4.5, avg_reviews_score: 4.9 },
-          { zone_id: "zone-louvre", zone_name: "Louvre", petsitters_count: 60, users_count: 500, avg_sitter_activity_score: 4.8, avg_reviews_score: 4.8 },
-          { zone_id: "zone-st-germain", zone_name: "Saint-Germain", petsitters_count: 150, users_count: 330, avg_sitter_activity_score: 4.6, avg_reviews_score: 4.6 },
-          { zone_id: "zone-latin-quarter", zone_name: "Latin Quarter", petsitters_count: 100, users_count: 350, avg_sitter_activity_score: 4.1, avg_reviews_score: 4.3 },
-          { zone_id: "zone-canal-st-martin", zone_name: "Canal Saint-Martin", petsitters_count: 200, users_count: 250, avg_sitter_activity_score: 3.5, avg_reviews_score: 4.0 },
-          { zone_id: "zone-bastille", zone_name: "Bastille", petsitters_count: 110, users_count: 260, avg_sitter_activity_score: 4.4, avg_reviews_score: 4.5 },
+          // Undersupplied (users_count / petsitters_count > 1.4)
+          { zone_id: "zone-eiffel", zone_name: "Eiffel Tower", petsitters_count: 80, users_count: 130, avg_sitter_activity_score: 4.2, avg_reviews_score: 4.7 },
+          { zone_id: "zone-montmartre", zone_name: "Montmartre", petsitters_count: 60, users_count: 100, avg_sitter_activity_score: 3.8, avg_reviews_score: 4.1 },
+          { zone_id: "zone-marais", zone_name: "Le Marais", petsitters_count: 70, users_count: 120, avg_sitter_activity_score: 4.5, avg_reviews_score: 4.9 },
+          { zone_id: "zone-louvre", zone_name: "Louvre", petsitters_count: 50, users_count: 90, avg_sitter_activity_score: 4.8, avg_reviews_score: 4.8 },
+          { zone_id: "zone-st-germain", zone_name: "Saint-Germain", petsitters_count: 65, users_count: 100, avg_sitter_activity_score: 4.6, avg_reviews_score: 4.6 },
+          { zone_id: "zone-latin-quarter", zone_name: "Latin Quarter", petsitters_count: 55, users_count: 80, avg_sitter_activity_score: 4.1, avg_reviews_score: 4.3 },
+          { zone_id: "zone-canal-st-martin", zone_name: "Canal Saint-Martin", petsitters_count: 75, users_count: 120, avg_sitter_activity_score: 3.5, avg_reviews_score: 4.0 },
+          { zone_id: "zone-bastille", zone_name: "Bastille", petsitters_count: 60, users_count: 100, avg_sitter_activity_score: 4.4, avg_reviews_score: 4.5 },
+
+          // Balanced (0.9 <= users_count / petsitters_count <= 1.4)
+          { zone_id: "zone-champs-elysees", zone_name: "Champs-Élysées", petsitters_count: 90, users_count: 110, avg_sitter_activity_score: 4.0, avg_reviews_score: 4.2 },
+          { zone_id: "zone-belleville", zone_name: "Belleville", petsitters_count: 100, users_count: 120, avg_sitter_activity_score: 3.7, avg_reviews_score: 4.0 },
+
+          // Oversupplied (users_count / petsitters_count < 0.9)
+          { zone_id: "zone-porte-de-bagnolet", zone_name: "Porte de Bagnolet", petsitters_count: 150, users_count: 100, avg_sitter_activity_score: 4.0, avg_reviews_score: 4.0 },
         ];
 
         // Mapbox API key
@@ -246,6 +255,22 @@
             "zone-latin-quarter": [2.3438, 48.8462], // Latin Quarter
             "zone-canal-st-martin": [2.3663, 48.8709], // Canal Saint-Martin
             "zone-bastille": [2.3690, 48.8534], // Bastille
+            "zone-champs-elysees": [2.3030, 48.8698], // Champs-Élysées
+            "zone-belleville": [2.3822, 48.8722], // Belleville
+            "zone-oberkampf": [2.3785, 48.8647], // Oberkampf
+            "zone-porte-maillot": [2.2769, 48.8781], // Porte Maillot
+            "zone-porte-de-versailles": [2.2876, 48.8322], // Porte de Versailles
+            "zone-porte-de-clignancourt": [2.3447, 48.8992], // Porte de Clignancourt
+            "zone-porte-doree": [2.4094, 48.8327], // Porte Dorée
+            "zone-porte-de-la-villette": [2.3847, 48.8941], // Porte de la Villette
+            "zone-porte-de-bagnolet": [2.4090, 48.8642], // Porte de Bagnolet
+            "zone-porte-de-clichy": [2.3122, 48.8972], // Porte de Clichy
+            "zone-porte-de-montreuil": [2.4156, 48.8532], // Porte de Montreuil
+            "zone-porte-de-vanves": [2.3056, 48.8272], // Porte de Vanves
+            "zone-porte-de-st-ouen": [2.3292, 48.8997], // Porte de St-Ouen
+            "zone-porte-de-la-chapelle": [2.3606, 48.8978], // Porte de la Chapelle
+            "zone-porte-de-pantin": [2.3931, 48.8922], // Porte de Pantin
+            "zone-porte-de-lilas": [2.4075, 48.8772], // Porte des Lilas
         };
 
         const processedData = zoneData.map(zone => {
