@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holidog Zone Insights</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals with Traffic Light Accents -->
+    <!-- Application Structure Plan: A two-column responsive dashboard. The left, wider column contains high-level summary cards and the primary interactive map visualization. The right, narrower column serves as a control and detail panel, featuring a searchable/filterable list of all zones, a comparative chart, and actionable recommendations. This structure was chosen because it provides an immediate high-level overview (summary cards) while allowing a user to seamlessly drill down into details using either the visual map or the analytical list, creating an intuitive and efficient workflow for exploring the data. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Overall marketplace stats -> Goal: Inform -> Viz: Summary Cards (HTML/CSS) -> Interaction: None -> Justification: Provides a quick, scannable overview of the most important aggregate metrics.
+        - Report Info: Geographic zone status -> Goal: Visualize Geography & Status -> Viz: HTML Div-based Map -> Interaction: Hover for tooltip, Click to select/highlight -> Justification: A map is the most intuitive way to show geographic data. Using styled divs avoids external libraries and SVG, while JS interactions provide the necessary depth of information on demand.
+        - Report Info: Detailed zone metrics -> Goal: Organize & Compare -> Viz: Filterable List (HTML/JS) -> Interaction: Search, Filter buttons, Click to select -> Justification: A list view is ideal for scanning and comparing specific data points across many items. Filtering makes it a powerful tool for analysis.
+        - Report Info: Sitter performance comparison -> Goal: Compare -> Viz: Bar Chart (Chart.js) -> Interaction: Hover for details -> Justification: A bar chart is excellent for comparing a single metric (like activity score) across all zones, highlighting outliers and trends.
+        - Report Info: Actionable insights -> Goal: Inform -> Viz: Recommendations List (HTML/CSS) -> Interaction: None -> Justification: A simple, clear list presents actionable takeaways without cluttering the primary data visualizations.
+        - Report Info: Data export -> Goal: Provide Data Access -> Viz: Button (HTML) -> Interaction: Click to download CSV -> Justification: A standard and expected feature for any data dashboard, implemented with Vanilla JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            max-height: 250px;
+        }
+        .zone-marker {
+            transition: all 0.3s ease-in-out;
+        }
+        .zone-marker.hovered {
+            transform: scale(1.2);
+        }
+        .zone-marker.selected {
+            transform: scale(1.3);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.7) !important;
+        }
+        .sidebar-item.selected {
+            background-color: #eef2ff; /* indigo-50 */
+            border-left-color: #3b82f6; /* blue-500 */
+        }
+        .map-tooltip {
+            transition: opacity 0.2s;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="app" class="flex flex-col min-h-screen">
+        
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
+            <div class="container mx-auto px-4 md:px-6 lg:px-8 py-6">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl backdrop-blur-sm">
+                        <span class="text-2xl">🐕</span>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold">Holidog</h1>
+                        <p class="text-blue-100 text-sm">Zone Insights Dashboard</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-col lg:flex-row flex-grow">
+            <main class="w-full lg:w-2/3 p-4 md:p-6 lg:p-8 flex flex-col">
+            
+            <section id="summary-cards" class="mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 rounded-lg mr-3">
+                                <span class="text-blue-600 text-lg">👥</span>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-500">Total Sitters</h3>
+                                <p id="total-sitters" class="text-2xl font-bold mt-1 text-slate-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 rounded-lg mr-3">
+                                <span class="text-green-600 text-lg">🏠</span>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-500">Total Users</h3>
+                                <p id="total-users" class="text-2xl font-bold mt-1 text-slate-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-emerald-100 rounded-lg mr-3">
+                                <span class="text-emerald-600 text-lg">⚖️</span>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-500">% Balanced Zones</h3>
+                                <p id="balanced-zones" class="text-2xl font-bold mt-1 text-slate-900">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-orange-100 rounded-lg mr-3">
+                                <span class="text-orange-600 text-lg">⚠️</span>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-500">Zones Requiring Action</h3>
+                                <p id="attention-zones" class="text-2xl font-bold mt-1 text-slate-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section class="flex-grow bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 flex flex-col">
+                <h2 class="text-xl font-bold mb-4 text-slate-900">Zone Supply & Demand Map (Paris)</h2>
+                <p class="text-slate-500 mb-6 text-sm">
+                    This visualization represents the geographic distribution and health of different zones. Zones are color-coded based on their supply-to-demand ratio. Hover over a zone for quick stats, or click to select and view detailed information in the sidebar. This allows for a quick assessment of which areas are thriving and which need strategic intervention.
+                </p>
+                <div id="map-container" class="relative w-full h-96 md:h-[500px] lg:h-[600px] bg-slate-200 rounded-lg overflow-hidden">
+                    <!-- Mapbox map will be rendered here -->
+                    <div id="map-tooltip" class="absolute bg-slate-900 text-white text-sm rounded-lg py-2 px-3 shadow-lg pointer-events-none opacity-0 z-30"></div>
+                </div>
+            </section>
+
+            <!-- Recommendations and Export Section -->
+            <section class="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Actionable Recommendations -->
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center">
+                            <span class="mr-2">💡</span>
+                            Actionable Insights
+                        </h2>
+                        <p class="text-slate-500 mb-4 text-sm">
+                            Based on the current data, here are some suggested actions to optimize the marketplace health. These insights are designed to guide operational focus towards areas with the most need.
+                        </p>
+                        <ul id="recommendations-list" class="space-y-3 text-sm">
+                            <!-- Recommendations will be injected here -->
+                        </ul>
+                    </div>
+
+                    <!-- Export Section -->
+                    <div class="flex flex-col justify-center">
+                        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                            <h3 class="text-lg font-semibold text-slate-900 mb-2 flex items-center">
+                                <span class="mr-2">📊</span>
+                                Data Export
+                            </h3>
+                            <p class="text-slate-600 text-sm mb-4">
+                                Download comprehensive zone data for further analysis in your preferred tools.
+                            </p>
+                            <button id="export-button" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2">
+                                <span class="text-lg">📥</span>
+                                <span>Export Zone Data (CSV)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <aside class="w-full lg:w-1/3 bg-slate-100/80 border-l border-slate-200 flex flex-col">
+            <div class="p-4 md:p-6 overflow-y-auto flex-grow">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-slate-900 flex items-center">
+                        <span class="mr-2">🔍</span>
+                        Zone Analytics
+                    </h2>
+                    <p class="text-slate-500 mb-4 text-sm">
+                        Use the tools below to explore detailed metrics for each zone. You can search for a specific zone or filter by its current supply/demand status. Clicking on any zone in this list will highlight it on the map for easy geographic location.
+                    </p>
+                    <input id="search-input" type="text" placeholder="Search by zone name..." class="w-full p-3 border border-slate-300 rounded-lg mb-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <div id="filter-buttons" class="flex space-x-2 mb-4">
+                        <button data-filter="all" class="flex-1 bg-blue-500 text-white px-3 py-2 text-sm rounded-lg shadow-sm transition-colors hover:bg-blue-600">All</button>
+                        <button data-filter="undersupplied" class="flex-1 bg-yellow-400 text-yellow-900 px-3 py-2 text-sm rounded-lg shadow-sm transition-colors hover:bg-yellow-500">Undersupplied</button>
+                        <button data-filter="balanced" class="flex-1 bg-green-500 text-white px-3 py-2 text-sm rounded-lg shadow-sm transition-colors hover:bg-green-600">Balanced</button>
+                        <button data-filter="oversupplied" class="flex-1 bg-red-500 text-white px-3 py-2 text-sm rounded-lg shadow-sm transition-colors hover:bg-red-600">Oversupplied</button>
+                    </div>
+                    <div id="zone-list" class="space-y-2 max-h-72 overflow-y-auto pr-2">
+                        <!-- Zone list items will be injected here by JS -->
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                    <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center">
+                        <span class="mr-2">📈</span>
+                        Sitter Activity Score Comparison
+                    </h2>
+                    <p class="text-slate-500 mb-4 text-sm">
+                        This chart compares the average activity score of sitters across all zones. Higher scores may indicate better engagement and availability. This helps identify zones where sitters might need encouragement or support to become more active.
+                    </p>
+                    <div class="chart-container">
+                        <canvas id="activity-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        const zoneData = [
+          { zone_id: "zone-eiffel", zone_name: "Eiffel Tower", petsitters_count: 80, users_count: 450, avg_sitter_activity_score: 4.2, avg_reviews_score: 4.7 },
+          { zone_id: "zone-montmartre", zone_name: "Montmartre", petsitters_count: 180, users_count: 320, avg_sitter_activity_score: 3.8, avg_reviews_score: 4.1 },
+          { zone_id: "zone-marais", zone_name: "Le Marais", petsitters_count: 120, users_count: 290, avg_sitter_activity_score: 4.5, avg_reviews_score: 4.9 },
+          { zone_id: "zone-louvre", zone_name: "Louvre", petsitters_count: 60, users_count: 500, avg_sitter_activity_score: 4.8, avg_reviews_score: 4.8 },
+          { zone_id: "zone-st-germain", zone_name: "Saint-Germain", petsitters_count: 150, users_count: 330, avg_sitter_activity_score: 4.6, avg_reviews_score: 4.6 },
+          { zone_id: "zone-latin-quarter", zone_name: "Latin Quarter", petsitters_count: 100, users_count: 350, avg_sitter_activity_score: 4.1, avg_reviews_score: 4.3 },
+          { zone_id: "zone-canal-st-martin", zone_name: "Canal Saint-Martin", petsitters_count: 200, users_count: 250, avg_sitter_activity_score: 3.5, avg_reviews_score: 4.0 },
+          { zone_id: "zone-bastille", zone_name: "Bastille", petsitters_count: 110, users_count: 260, avg_sitter_activity_score: 4.4, avg_reviews_score: 4.5 },
+        ];
+
+        // Mapbox API key
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2FseWFuYSIsImEiOiJjbWJsbGR1N3YwaTN0MmpwZ2I5Ymc4aGc4In0.piweJhJhMNcBStGeCZ3keA';
+
+        // Zone coordinates for Paris (approximate locations)
+        const zoneCoordinates = {
+            "zone-eiffel": [2.2945, 48.8584], // Eiffel Tower
+            "zone-montmartre": [2.3422, 48.8867], // Montmartre
+            "zone-marais": [2.3624, 48.8566], // Le Marais
+            "zone-louvre": [2.3376, 48.8606], // Louvre
+            "zone-st-germain": [2.3333, 48.8534], // Saint-Germain
+            "zone-latin-quarter": [2.3438, 48.8462], // Latin Quarter
+            "zone-canal-st-martin": [2.3663, 48.8709], // Canal Saint-Martin
+            "zone-bastille": [2.3690, 48.8534], // Bastille
+        };
+
+        const processedData = zoneData.map(zone => {
+            const ratio = zone.petsitters_count > 0 ? zone.users_count / zone.petsitters_count : Infinity;
+            let status;
+            if (ratio > 1.4) status = 'undersupplied';
+            else if (ratio < 0.9) status = 'oversupplied';
+            else status = 'balanced';
+            return { ...zone, demand_ratio: ratio, status };
+        });
+
+        const statusConfig = {
+            undersupplied: { label: 'Undersupplied', color: 'bg-yellow-400', textColor: 'text-yellow-900', icon: '🟡', recommendation: "High demand detected. Prioritize sitter recruitment campaigns in this area." },
+            balanced: { label: 'Balanced', color: 'bg-green-500', textColor: 'text-white', icon: '🟢', recommendation: "Marketplace is healthy. Monitor activity and maintain engagement." },
+            oversupplied: { label: 'Oversupplied', color: 'bg-red-500', textColor: 'text-white', icon: '🔴', recommendation: "Sitter supply exceeds demand. Focus on user acquisition or re-engage inactive sitters." },
+        };
+
+        const mapContainer = document.getElementById('map-container');
+        const mapTooltip = document.getElementById('map-tooltip');
+        const zoneList = document.getElementById('zone-list');
+        const searchInput = document.getElementById('search-input');
+        const filterButtons = document.getElementById('filter-buttons');
+        let activityChartInstance = null;
+        let selectedZoneId = null;
+        let map = null;
+        let markers = {};
+
+        function updateSummaryCards() {
+            const totalSitters = processedData.reduce((sum, z) => sum + z.petsitters_count, 0);
+            const totalUsers = processedData.reduce((sum, z) => sum + z.users_count, 0);
+            const balancedCount = processedData.filter(z => z.status === 'balanced').length;
+            const attentionCount = processedData.filter(z => z.status !== 'balanced').length;
+
+            document.getElementById('total-sitters').textContent = totalSitters.toLocaleString();
+            document.getElementById('total-users').textContent = totalUsers.toLocaleString();
+            document.getElementById('balanced-zones').textContent = `${Math.round((balancedCount / processedData.length) * 100)}%`;
+            document.getElementById('attention-zones').textContent = attentionCount;
+        }
+
+        function renderMap() {
+            // Initialize Mapbox map
+            map = new mapboxgl.Map({
+                container: 'map-container',
+                style: 'mapbox://styles/mapbox/light-v11',
+                center: [2.3522, 48.8566], // Paris center
+                zoom: 12,
+                attributionControl: false
+            });
+
+            // Add navigation controls
+            map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+            // Wait for map to load before adding markers
+            map.on('load', () => {
+                addMarkersToMap();
+            });
+        }
+
+        function addMarkersToMap() {
+            // Clear existing markers
+            Object.values(markers).forEach(marker => marker.remove());
+            markers = {};
+
+            // Add custom markers for each zone
+            processedData.forEach(zone => {
+                const coordinates = zoneCoordinates[zone.zone_id];
+                if (!coordinates) return;
+
+                // Create custom marker element
+                const markerEl = document.createElement('div');
+                markerEl.className = `zone-marker cursor-pointer transition-all duration-300 ${statusConfig[zone.status].color} ${statusConfig[zone.status].textColor}`;
+                markerEl.style.width = '24px';
+                markerEl.style.height = '24px';
+                markerEl.style.borderRadius = '50%';
+                markerEl.style.border = '2px solid white';
+                markerEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                markerEl.style.display = 'flex';
+                markerEl.style.alignItems = 'center';
+                markerEl.style.justifyContent = 'center';
+                markerEl.style.fontSize = '10px';
+                markerEl.style.fontWeight = 'bold';
+                markerEl.style.position = 'relative';
+                markerEl.style.zIndex = '1';
+                markerEl.textContent = zone.zone_name.charAt(0);
+                markerEl.dataset.zoneId = zone.zone_id;
+
+                // Create popup
+                const popup = new mapboxgl.Popup({
+                    closeButton: false,
+                    closeOnClick: false,
+                    maxWidth: '200px'
+                }).setHTML(`
+                    <div class="font-bold text-sm">${zone.zone_name}</div>
+                    <div class="text-xs text-gray-600">Status: ${statusConfig[zone.status].label}</div>
+                    <div class="text-xs text-gray-600">Sitters: ${zone.petsitters_count}</div>
+                    <div class="text-xs text-gray-600">Users: ${zone.users_count}</div>
+                `);
+
+                // Create and add marker
+                const marker = new mapboxgl.Marker(markerEl)
+                    .setLngLat(coordinates)
+                    .setPopup(popup)
+                    .addTo(map);
+
+                // Store marker reference
+                markers[zone.zone_id] = marker;
+
+                // Add hover effects
+                markerEl.addEventListener('mouseenter', () => {
+                    if (zone.zone_id !== selectedZoneId) {
+                        markerEl.classList.add('hovered');
+                    }
+                });
+
+                markerEl.addEventListener('mouseleave', () => {
+                    markerEl.classList.remove('hovered');
+                });
+
+                // Add click handler
+                markerEl.addEventListener('click', () => {
+                    selectZone(zone.zone_id);
+                });
+            });
+        }
+        
+        function renderZoneList(filter = 'all', searchTerm = '') {
+            zoneList.innerHTML = '';
+            const filteredData = processedData.filter(zone => {
+                const statusMatch = (filter === 'all' || zone.status === filter);
+                const searchMatch = zone.zone_name.toLowerCase().includes(searchTerm.toLowerCase());
+                return statusMatch && searchMatch;
+            });
+
+            if(filteredData.length === 0) {
+                zoneList.innerHTML = `<div class="text-center text-slate-500 p-4">No zones match your criteria.</div>`;
+                return;
+            }
+
+            filteredData.forEach(zone => {
+                const itemEl = document.createElement('div');
+                itemEl.className = `sidebar-item flex items-center justify-between p-3 bg-white rounded-lg cursor-pointer border-l-4 transition-colors ${zone.zone_id === selectedZoneId ? 'selected' : 'border-transparent'}`;
+                itemEl.dataset.zoneId = zone.zone_id;
+                const statusInfo = statusConfig[zone.status];
+
+                itemEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-slate-800">${zone.zone_name}</p>
+                        <p class="text-xs text-slate-500">Sitters: ${zone.petsitters_count} | Users: ${zone.users_count}</p>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 rounded-full ${statusInfo.color} ${statusInfo.textColor}">${statusInfo.label}</span>
+                `;
+
+                itemEl.addEventListener('click', () => {
+                    selectZone(zone.zone_id);
+                });
+
+                zoneList.appendChild(itemEl);
+            });
+        }
+        
+        function selectZone(zoneId) {
+            selectedZoneId = zoneId;
+            
+            // Reset all markers and sidebar items
+            Object.values(markers).forEach(marker => {
+                const markerEl = marker.getElement();
+                markerEl.classList.remove('hovered', 'selected');
+                markerEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+            });
+            
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('selected'));
+
+            if (zoneId) {
+                // Highlight selected marker
+                const selectedMarker = markers[zoneId];
+                if (selectedMarker) {
+                    const markerEl = selectedMarker.getElement();
+                    markerEl.classList.add('selected');
+                    
+                    // Fly to the selected zone
+                    const coordinates = zoneCoordinates[zoneId];
+                    if (coordinates) {
+                        map.flyTo({
+                            center: coordinates,
+                            zoom: 14,
+                            duration: 1000
+                        });
+                    }
+                }
+
+                // Highlight sidebar item
+                const sidebarEl = document.querySelector(`.sidebar-item[data-zone-id="${zoneId}"]`);
+                if (sidebarEl) {
+                    sidebarEl.classList.add('selected');
+                    sidebarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+            renderZoneList(getActiveFilter(), searchInput.value);
+        }
+
+        function getActiveFilter() {
+            return filterButtons.querySelector('button.bg-blue-500')?.dataset.filter || 'all';
+        }
+
+        function updateMapMarkers(filter, searchTerm) {
+            if (!map || !map.isStyleLoaded()) return;
+            
+            // Filter zones based on current filter and search
+            const filteredZones = processedData.filter(zone => {
+                const statusMatch = (filter === 'all' || zone.status === filter);
+                const searchMatch = zone.zone_name.toLowerCase().includes(searchTerm.toLowerCase());
+                return statusMatch && searchMatch;
+            });
+
+            // Hide/show markers based on filter
+            Object.keys(markers).forEach(zoneId => {
+                const marker = markers[zoneId];
+                const isVisible = filteredZones.some(zone => zone.zone_id === zoneId);
+                
+                if (isVisible) {
+                    marker.getElement().style.display = 'flex';
+                } else {
+                    marker.getElement().style.display = 'none';
+                }
+            });
+        }
+        
+        searchInput.addEventListener('input', (e) => {
+            const filter = getActiveFilter();
+            const searchTerm = e.target.value;
+            renderZoneList(filter, searchTerm);
+            updateMapMarkers(filter, searchTerm);
+        });
+
+        filterButtons.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                filterButtons.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('bg-blue-500', 'text-white');
+                    if (!btn.dataset.filter.match(/undersupplied|balanced|oversupplied/)) {
+                        btn.classList.add('bg-slate-200', 'text-slate-700');
+                    }
+                });
+                e.target.classList.add('bg-blue-500', 'text-white');
+                e.target.classList.remove('bg-slate-200', 'text-slate-700');
+                const filter = e.target.dataset.filter;
+                const searchTerm = searchInput.value;
+                renderZoneList(filter, searchTerm);
+                updateMapMarkers(filter, searchTerm);
+            }
+        });
+
+        function renderActivityChart() {
+            const ctx = document.getElementById('activity-chart').getContext('2d');
+            const sortedData = [...processedData].sort((a, b) => b.avg_sitter_activity_score - a.avg_sitter_activity_score);
+
+            const data = {
+                labels: sortedData.map(z => z.zone_name),
+                datasets: [{
+                    label: 'Avg. Sitter Activity Score',
+                    data: sortedData.map(z => z.avg_sitter_activity_score),
+                    backgroundColor: sortedData.map(z => {
+                        if (z.status === 'undersupplied') return 'rgba(250, 204, 21, 0.6)'; // yellow-400
+                        if (z.status === 'oversupplied') return 'rgba(239, 68, 68, 0.6)'; // red-500
+                        return 'rgba(59, 130, 246, 0.6)'; // blue-500
+                    }),
+                    borderColor: sortedData.map(z => {
+                        if (z.status === 'undersupplied') return 'rgba(250, 204, 21, 1)';
+                        if (z.status === 'oversupplied') return 'rgba(239, 68, 68, 1)';
+                        return 'rgba(59, 130, 246, 1)';
+                    }),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            };
+
+            if (activityChartInstance) {
+                activityChartInstance.destroy();
+            }
+
+            activityChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 5,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false,
+                            },
+                             ticks: {
+                                autoSkip: false,
+                                callback: function(value, index, values) {
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 16 ? label.substring(0, 16) + '...' : label;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { weight: 'bold' },
+                            bodyFont: { weight: 'normal' },
+                            padding: 10,
+                            cornerRadius: 6,
+                            displayColors: false,
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderRecommendations() {
+            const recommendationsList = document.getElementById('recommendations-list');
+            const recommendations = {};
+
+            processedData.forEach(zone => {
+                if (!recommendations[zone.status]) {
+                    recommendations[zone.status] = {
+                        ...statusConfig[zone.status],
+                        zones: []
+                    };
+                }
+                recommendations[zone.status].zones.push(zone.zone_name);
+            });
+
+            recommendationsList.innerHTML = Object.values(recommendations)
+                .map(rec => `
+                    <li class="flex items-start p-3 bg-slate-50 rounded-lg border-l-4 ${rec.status === 'undersupplied' ? 'border-l-yellow-400' : rec.status === 'balanced' ? 'border-l-green-500' : 'border-l-red-500'}">
+                        <span class="mr-3 mt-1 text-lg">${rec.icon}</span>
+                        <div>
+                            <p class="font-semibold text-slate-800">${rec.recommendation}</p>
+                            <p class="text-slate-600 text-xs mt-1">Applies to: ${rec.zones.slice(0, 2).join(', ')}${rec.zones.length > 2 ? `, and ${rec.zones.length - 2} more` : ''}.</p>
+                        </div>
+                    </li>
+                `).join('');
+        }
+
+        function exportData() {
+            const headers = "Zone ID,Zone Name,Status,Sitters,Users,Demand Ratio,Avg Activity Score,Avg Review Score";
+            const csvRows = [headers];
+            
+            processedData.forEach(zone => {
+                const values = [
+                    zone.zone_id,
+                    `"${zone.zone_name}"`,
+                    zone.status,
+                    zone.petsitters_count,
+                    zone.users_count,
+                    zone.demand_ratio.toFixed(2),
+                    zone.avg_sitter_activity_score,
+                    zone.avg_reviews_score
+                ];
+                csvRows.push(values.join(','));
+            });
+
+            const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "holidog_zone_data.csv");
+            document.body.appendChild(link); 
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        document.getElementById('export-button').addEventListener('click', exportData);
+        
+        function init() {
+            updateSummaryCards();
+            renderMap();
+            renderZoneList();
+            renderActivityChart();
+            renderRecommendations();
+        }
+
+        init();
+    });
+    </script>
+</body>
+</html>
